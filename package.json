@@ -1,8 +1,12 @@
 {
   "name": "@anaxer/sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Official TypeScript SDK for the Anaxer Solana real-time data API.",
   "homepage": "https://anaxer.com/docs/sdks",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Anaxer-v2/anaxer-sdk-js.git"
+  },
   "bugs": {
     "url": "https://anaxer.com/contact"
   },
@@ -54,9 +58,5 @@
   },
   "publishConfig": {
     "access": "public"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Anaxer-v2/anaxer-sdk-js.git"
   }
 }
