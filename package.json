@@ -1,0 +1,62 @@
+{
+  "name": "@anaxer/sdk",
+  "version": "0.1.1",
+  "description": "Official TypeScript SDK for the Anaxer Solana real-time data API.",
+  "homepage": "https://anaxer.com/docs/sdks",
+  "bugs": {
+    "url": "https://anaxer.com/contact"
+  },
+  "keywords": [
+    "solana",
+    "pumpfun",
+    "pump-fun",
+    "websocket",
+    "dex",
+    "real-time",
+    "trading",
+    "api",
+    "sdk",
+    "memecoin"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup && node ./scripts/assert-dist-clean.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.10",
+    "@types/ws": "^8.5.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.6.3",
+    "vitest": "^3.2.4"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Anaxer-v2/anaxer-sdk-js.git"
+  }
+}
