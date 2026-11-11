@@ -1,7 +1,11 @@
 import type { DataMessageV1 } from "./envelope";
 import type { CreatedV1, SocialsV1 } from "./lifecycle";
-import type { GraduatedV1 } from "./lifecycle";
-import type { SwapV1 } from "./swap";
+import type { GraduatedV1, LiquidityQuoteV1 } from "./lifecycle";
+import type { PriceUpdateV1 } from "./price";
+import type { SwapV1, TokenLegV1 } from "./swap";
+
+/** A consumer token leg: `symbol` is absent on events written before build-plan 45. */
+export type TokenLegConsumerInput = Omit<TokenLegV1, "symbol"> & { symbol?: string | null };
 
 /** Internal consumer trade shape (pre-v1 flat Trade). */
 export interface TradeConsumerInput {
@@ -10,8 +14,8 @@ export interface TradeConsumerInput {
   timestamp: number | null;
   wallet: string;
   source: string;
-  from: SwapV1["swap"]["from"];
-  to: SwapV1["swap"]["to"];
+  from: TokenLegConsumerInput;
+  to: TokenLegConsumerInput;
   volumeUsd: number | null;
 }
 
@@ -47,9 +51,28 @@ export interface GraduatedConsumerInput {
   mayhemMode?: boolean;
   /** Lamports string | null (internal); reshape converts to SOL number. */
   liquiditySol?: string | null;
+  liquidityQuote?: { mint: string; symbol: string | null; amount: string; decimals: number | null } | null;
+  liquidityUsd?: number | null;
+}
+
+/**
+ * A graduation's quote side on the wire, `uiAmount` from the raw amount (null without decimals).
+ * Shared with REST (`apps/gateway/src/rest/graduations.ts`) so both send the same shape.
+ */
+export function liquidityQuoteToV1(
+  q: { mint: string; symbol: string | null; amount: string; decimals: number | null } | null | undefined,
+): LiquidityQuoteV1 | null {
+  if (!q) return null;
+  const ui = q.decimals === null ? null : Number(q.amount) / 10 ** q.decimals;
+  return { mint: q.mint, symbol: q.symbol, amount: q.amount, uiAmount: ui !== null && Number.isFinite(ui) ? ui : null, decimals: q.decimals };
 }
 
 const NULL_SOCIALS = { website: null, twitter: null, telegram: null } as const;
+
+/** A leg in wire order, `symbol` null when the event predates it (build-plan 45). */
+function tokenLegV1(leg: TokenLegConsumerInput): TokenLegV1 {
+  return { mint: leg.mint, symbol: leg.symbol ?? null, amount: leg.amount, uiAmount: leg.uiAmount, decimals: leg.decimals };
+}
 
 /** Nest legs under `swap`, add `type: "swap"`. */
 export function reshapeTradeToSwapV1(consumer: TradeConsumerInput): SwapV1 {
@@ -57,7 +80,21 @@ export function reshapeTradeToSwapV1(consumer: TradeConsumerInput): SwapV1 {
   return {
     type: "swap",
     ...rest,
-    swap: { from, to },
+    swap: { from: tokenLegV1(from), to: tokenLegV1(to) },
+  };
+}
+
+/** A price update in wire order, `symbol` null when it predates it (build-plan 45). */
+export function reshapePriceV1(p: Omit<PriceUpdateV1, "symbol"> & { symbol?: string | null }): PriceUpdateV1 {
+  return {
+    type: "price",
+    source: p.source,
+    mint: p.mint,
+    symbol: p.symbol ?? null,
+    price: p.price,
+    marketCapUsd: p.marketCapUsd,
+    slot: p.slot,
+    timestamp: p.timestamp,
   };
 }
 
@@ -96,11 +133,9 @@ export function reshapeGraduatedToGraduatedV1(
     const n = Number(lamports) / 1e9;
     liquiditySol = Number.isFinite(n) ? n : null;
   }
+  // Field order as graduatedV1Schema and REST (it led with signature / slot / timestamp before).
   return {
     type: "graduated",
-    signature: consumer.signature,
-    slot: consumer.slot,
-    timestamp: consumer.timestamp,
     source: consumer.source,
     mint: consumer.mint,
     name: consumer.name ?? null,
@@ -110,7 +145,12 @@ export function reshapeGraduatedToGraduatedV1(
     mayhemMode: consumer.mayhemMode === true,
     socials: { ...NULL_SOCIALS },
     liquiditySol,
+    liquidityUsd: consumer.liquidityUsd ?? null,
+    liquidityQuote: liquidityQuoteToV1(consumer.liquidityQuote),
     timeToGraduateSeconds: null,
+    signature: consumer.signature,
+    slot: consumer.slot,
+    timestamp: consumer.timestamp,
   };
 }
 

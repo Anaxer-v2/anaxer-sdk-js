@@ -139,6 +139,151 @@ describe("rest client", () => {
     expect(server.requests[0]?.search).toContain("solOnly=true");
   });
 
+  it("tokens.trades joins sources and forwards size bounds", async () => {
+    server = new MockHttpServer();
+    const baseUrl = await server.listen();
+    server.handler = (_req, res) => {
+      json(res, 200, { data: [], next: null, window: { from: 1, to: 2 } });
+    };
+
+    const client = connect({ apiKey: "k", baseUrl, reconnect: false, heartbeatMs: 0 });
+    await client.tokens.trades("TokenMint1111111111111111111111111111111", {
+      sources: ["pump_fun", "pump_amm"],
+      minVolumeUsd: 100,
+      maxVolumeUsd: 5000,
+    });
+    const q = new URLSearchParams(server.requests[0]?.search);
+    expect(q.get("sources")).toBe("pump_fun,pump_amm");
+    expect(q.get("source")).toBeNull();
+    expect(q.get("minVolumeUsd")).toBe("100");
+    expect(q.get("maxVolumeUsd")).toBe("5000");
+  });
+
+  it("source and sources together reject without a request", async () => {
+    server = new MockHttpServer();
+    const baseUrl = await server.listen();
+    const client = connect({ apiKey: "k", baseUrl, reconnect: false, heartbeatMs: 0 });
+    const opts = { source: "pump_fun", sources: ["pump_amm"] } as unknown as { source: string };
+    await expect(client.creations(opts)).rejects.toMatchObject({ code: "invalid_request" });
+    await expect(client.graduations(opts)).rejects.toMatchObject({ code: "invalid_request" });
+    expect(server.requests).toHaveLength(0);
+  });
+
+  it("creations/graduations send sources as a comma list", async () => {
+    server = new MockHttpServer();
+    const baseUrl = await server.listen();
+    server.handler = (_req, res) => {
+      json(res, 200, { data: [], next: null, window: { from: 1, to: 2 } });
+    };
+    const client = connect({ apiKey: "k", baseUrl, reconnect: false, heartbeatMs: 0 });
+    await client.creations({ sources: ["pump_fun", "raydium_launchlab"] });
+    await client.graduations({ sources: ["pump_fun"], minLiquiditySol: 50 });
+    expect(new URLSearchParams(server.requests[0]?.search).get("sources")).toBe(
+      "pump_fun,raydium_launchlab",
+    );
+    const g = new URLSearchParams(server.requests[1]?.search);
+    expect(g.get("sources")).toBe("pump_fun");
+    expect(g.get("minLiquiditySol")).toBe("50");
+  });
+
+  it("wallets.trades hits /v1/wallets/:wallet/trades with mints, sources, size, solOnly", async () => {
+    server = new MockHttpServer();
+    const baseUrl = await server.listen();
+    const swap = {
+      type: "swap",
+      source: "pump_fun",
+      wallet: "W",
+      volumeUsd: 1,
+      swap: {
+        from: {
+          mint: "So11111111111111111111111111111111111111112",
+          symbol: "SOL",
+          amount: "1",
+          uiAmount: 1e-9,
+          decimals: 9,
+        },
+        to: { mint: "M", symbol: null, amount: "2", uiAmount: 2, decimals: 0 },
+      },
+      signature: "s",
+      slot: 1,
+      timestamp: 1,
+    };
+    server.handler = (_req, res) => {
+      json(res, 200, { data: [swap], next: null, window: { from: 1, to: 2 } });
+    };
+    const client = connect({ apiKey: "k", baseUrl, reconnect: false, heartbeatMs: 0 });
+    const wallet = "8gM4gnxdLdkvifM9TCwkGAxrnNw4NiSiHbAdE1RqY96e";
+    const page = await client.wallets.trades(wallet, {
+      mints: ["MintA1111111111111111111111111111111", "MintB1111111111111111111111111111111"],
+      sources: ["pump_fun"],
+      solOnly: true,
+      minVolumeUsd: 5,
+      limit: 10,
+    });
+    expect(page.data[0]?.swap.from.symbol).toBe("SOL");
+    expect(page.data[0]?.swap.to.symbol).toBeNull();
+    expect(server.requests[0]?.path).toBe("/v1/wallets/" + wallet + "/trades");
+    const q = new URLSearchParams(server.requests[0]?.search);
+    expect(q.get("mints")).toBe(
+      "MintA1111111111111111111111111111111,MintB1111111111111111111111111111111",
+    );
+    expect(q.get("sources")).toBe("pump_fun");
+    expect(q.get("solOnly")).toBe("true");
+    expect(q.get("minVolumeUsd")).toBe("5");
+    expect(q.get("limit")).toBe("10");
+  });
+
+  it("wallets.transfers sends direction/mints/size and walks next on the same endpoint", async () => {
+    server = new MockHttpServer();
+    const baseUrl = await server.listen();
+    const transfer = (sig: string) => ({
+      type: "transfer",
+      wallet: "W",
+      volumeUsd: null,
+      transfer: { from: "W", to: "X", mint: "M", symbol: null, amount: "1", uiAmount: 1, decimals: 0 },
+      signature: sig,
+      slot: 1,
+      timestamp: 1,
+    });
+    let hits = 0;
+    server.handler = (_req, res, url) => {
+      hits += 1;
+      if (hits === 1) {
+        json(res, 200, { data: [transfer("a")], next: "c2", window: { from: 1, to: 2 } });
+        return;
+      }
+      expect(url.searchParams.get("cursor")).toBe("c2");
+      json(res, 200, { data: [transfer("b")], next: null, window: { from: 1, to: 2 } });
+    };
+    const client = connect({ apiKey: "k", baseUrl, reconnect: false, heartbeatMs: 0 });
+    const page = await client.wallets.transfers("W", {
+      direction: "in",
+      mints: ["So11111111111111111111111111111111111111112"],
+      maxVolumeUsd: 1000,
+    });
+    const sigs: string[] = [];
+    for await (const t of page) sigs.push(t.signature);
+    expect(sigs).toEqual(["a", "b"]);
+    expect(server.requests.every((r) => r.path === "/v1/wallets/W/transfers")).toBe(true);
+    const q = new URLSearchParams(server.requests[1]?.search);
+    expect(q.get("direction")).toBe("in");
+    expect(q.get("mints")).toBe("So11111111111111111111111111111111111111112");
+    expect(q.get("maxVolumeUsd")).toBe("1000");
+  });
+
+  it("path params are URL-encoded", async () => {
+    server = new MockHttpServer();
+    const baseUrl = await server.listen();
+    server.handler = (_req, res) => {
+      json(res, 200, { data: [], next: null, window: { from: 1, to: 2 } });
+    };
+    const client = connect({ apiKey: "k", baseUrl, reconnect: false, heartbeatMs: 0 });
+    await client.wallets.trades("a/b?c");
+    await client.wallets.transfers("a/b?c");
+    expect(server.requests[0]?.path).toBe("/v1/wallets/a%2Fb%3Fc/trades");
+    expect(server.requests[1]?.path).toBe("/v1/wallets/a%2Fb%3Fc/transfers");
+  });
+
   it("creations() Page async-iterates across next until null", async () => {
     server = new MockHttpServer();
     const baseUrl = await server.listen();

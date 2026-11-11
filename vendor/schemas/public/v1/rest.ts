@@ -74,6 +74,16 @@ export const REST_KNOWN_SOURCES = [
   "orca_whirlpool",
   "meteora_pools",
   "pancakeswap",
+  "jupiter_order_engine",
+  "tessera_v",
+  "bisonfi",
+  "goonfi_v2",
+  "zerofi",
+  "scorch",
+  "alphaq",
+  "deriverse",
+  "byreal_clmm",
+  "manifest",
   "bonkfun",
 ] as const;
 
@@ -82,6 +92,13 @@ export type RestKnownSourceV1 = (typeof REST_KNOWN_SOURCES)[number];
 export const restKnownSourceV1Schema = z.enum(REST_KNOWN_SOURCES);
 
 export const REST_BATCH_MINTS_MAX = 50;
+
+/**
+ * Most mints on `GET /v1/tokens/batch/price` — the WebSocket `prices` channel's `mints` limit
+ * (founder 2026-11-01). The metadata batch keeps REST_BATCH_MINTS_MAX: its misses resolve
+ * on-chain and fetch socials within the request.
+ */
+export const REST_BATCH_PRICE_MINTS_MAX = 100;
 
 export const launchpadStatsSourceRowV1Schema = z
   .object({

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { connect, AnaxerError } from "../src/index";
+import { connect, AnaxerError, type ConnectionLimits } from "../src/index";
 import { MockStreamServer, waitFor } from "./mockServer";
 
 describe("ws client", () => {
@@ -19,12 +19,15 @@ describe("ws client", () => {
       heartbeatMs: 0,
     });
 
-    const limits = {
-      connectionsPerStream: 2,
-      tradesRequiresMints: false,
-      tradesMintCap: 100,
+    const limits: ConnectionLimits = {
+      connectionsPerStream: 1,
+      tradesRequiresMints: true,
+      tradesMintCap: 10,
+      transfersRequiresFilter: true,
+      transfersWalletCap: 25,
+      transfersMintCap: 10,
     };
-    const connectedP = new Promise<typeof limits>((resolve) => {
+    const connectedP = new Promise<ConnectionLimits>((resolve) => {
       client.on("connected", resolve);
     });
 
@@ -84,8 +87,8 @@ describe("ws client", () => {
       wallet: "Wallet1111111111111111111111111111111",
       volumeUsd: 42,
       swap: {
-        from: { mint: "MintA", amount: "1", uiAmount: 1, decimals: 0 },
-        to: { mint: "MintB", amount: "2", uiAmount: 2, decimals: 0 },
+        from: { mint: "MintA", symbol: "SOL", amount: "1", uiAmount: 1, decimals: 0 },
+        to: { mint: "MintB", symbol: null, amount: "2", uiAmount: 2, decimals: 0 },
       },
       signature: "Sig",
       slot: 1,
@@ -115,6 +118,98 @@ describe("ws client", () => {
     });
     await new Promise((r) => setTimeout(r, 30));
     expect(otherFired).toBe(false);
+
+    await client.close();
+  });
+
+  it("old-shape connected frame (no transfers limits) still connects", async () => {
+    server = new MockStreamServer();
+    const wsUrl = await server.listen();
+    const client = connect({ apiKey: "k", wsUrl, reconnect: false, heartbeatMs: 0 });
+    let errored = false;
+    client.on("error", () => {
+      errored = true;
+    });
+
+    const readyP = client.ready();
+    // A gateway from before the transfers channel: only the three trades-era fields,
+    // plus an unknown field a future gateway might add.
+    await server.acceptAndConnect({
+      connectionsPerStream: 2,
+      tradesRequiresMints: false,
+      tradesMintCap: 100,
+      someFutureLimit: 7,
+    });
+    const limits = await readyP;
+    expect(limits).toEqual({
+      connectionsPerStream: 2,
+      tradesRequiresMints: false,
+      tradesMintCap: 100,
+    });
+    expect(limits.transfersWalletCap).toBeUndefined();
+    expect(errored).toBe(false);
+
+    // And it still streams.
+    const subscribeMsg = server.onceMessage((m) => m.type === "subscribe");
+    const sub = client.stream("trades", { mints: ["Mint11111111111111111111111111111111"] });
+    const msg = await subscribeMsg;
+    expect(msg.id).toBe(sub.id);
+
+    await client.close();
+  });
+
+  it("transfers: subscribe frame carries wallets/direction, transfer frames reach the sub", async () => {
+    server = new MockStreamServer();
+    const wsUrl = await server.listen();
+    const client = connect({ apiKey: "k", wsUrl, reconnect: false, heartbeatMs: 0 });
+
+    const wallet = "5G75aiNzTwpycR5c2AyfcYq2nxFLBYV4fyAjsTAeKihh";
+    const sub = client.stream("transfers", {
+      wallets: [wallet],
+      direction: "out",
+      minVolumeUsd: 1,
+    });
+    const subscribeMsg = server.onceMessage((m) => m.type === "subscribe");
+    const [limits] = await Promise.all([client.ready(), server.acceptAndConnect()]);
+    expect(limits.transfersRequiresFilter).toBe(false);
+    expect(limits.transfersWalletCap).toBe(1000);
+    expect(limits.transfersMintCap).toBe(100);
+
+    const msg = await subscribeMsg;
+    expect(msg).toEqual({
+      type: "subscribe",
+      id: sub.id,
+      channel: "transfers",
+      filters: { wallets: [wallet], direction: "out", minVolumeUsd: 1 },
+    });
+
+    const transfer = {
+      type: "transfer",
+      wallet,
+      volumeUsd: 19.94,
+      transfer: {
+        from: wallet,
+        to: "B4uQWmfRWzxfWWwUsXUGMuUYg4r3zmdHuaBdrFBbc3pE",
+        mint: "So11111111111111111111111111111111111111112",
+        symbol: "SOL",
+        amount: "206376928",
+        uiAmount: 0.206376928,
+        decimals: 9,
+      },
+      signature: "Sig",
+      slot: 463269930,
+      timestamp: 1793360046000,
+    };
+    const dataP = new Promise<unknown>((resolve) => sub.on("data", resolve));
+    server.send({
+      v: 1,
+      channel: "transfers",
+      type: "transfer",
+      sub: sub.id,
+      ts: Date.now(),
+      data: transfer,
+    });
+    await expect(dataP).resolves.toEqual(transfer);
 
     await client.close();
   });

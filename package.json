@@ -1,6 +1,6 @@
 {
   "name": "@anaxer/sdk",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Official TypeScript SDK for the Anaxer Solana real-time data API.",
   "homepage": "https://anaxer.com/docs/sdks",
   "repository": {
@@ -33,7 +33,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=20"

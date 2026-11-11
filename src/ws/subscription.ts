@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import type { SubscriptionFiltersV1 } from "../types";
 import { AnaxerError } from "../errors";
 
-export type StreamChannel = "trades" | "creations" | "graduations" | "prices";
+export type StreamChannel = "trades" | "creations" | "graduations" | "prices" | "transfers";
 
 export interface SubscriptionEvents<T> {
   data: [data: T];

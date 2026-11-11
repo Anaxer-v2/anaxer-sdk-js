@@ -62,10 +62,13 @@ export class MockStreamServer {
 
   /** Speak the v1 handshake: wait for connection, send `connected`. */
   async acceptAndConnect(
-    limits = {
+    limits: object = {
       connectionsPerStream: 2,
       tradesRequiresMints: false,
       tradesMintCap: 100,
+      transfersRequiresFilter: false,
+      transfersWalletCap: 1000,
+      transfersMintCap: 100,
     },
   ): Promise<{
     authorization: string | undefined;

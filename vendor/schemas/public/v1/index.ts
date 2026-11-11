@@ -9,11 +9,11 @@ export type { ChannelV1, DataMessageTypeV1, DataMessageV1 } from "./envelope";
 export { tokenLegV1Schema, swapV1Schema } from "./swap";
 export type { TokenLegV1, SwapV1 } from "./swap";
 
-export { socialsV1Schema, createdV1Schema, graduatedV1Schema } from "./lifecycle";
-export type { SocialsV1, CreatedV1, GraduatedV1 } from "./lifecycle";
+export { socialsV1Schema, createdV1Schema, graduatedV1Schema, liquidityQuoteV1Schema } from "./lifecycle";
+export type { SocialsV1, CreatedV1, GraduatedV1, LiquidityQuoteV1 } from "./lifecycle";
 
-export { priceUpdateV1Schema } from "./price";
-export type { PriceUpdateV1 } from "./price";
+export { priceUpdateV1Schema, restPriceV1Schema } from "./price";
+export type { PriceUpdateV1, RestPriceV1 } from "./price";
 
 export {
   tokenMetadataFetchStatusV1Schema,
@@ -23,6 +23,7 @@ export type { TokenMetadataFetchStatusV1, TokenMetadataV1 } from "./tokenMetadat
 
 export {
   REST_BATCH_MINTS_MAX,
+  REST_BATCH_PRICE_MINTS_MAX,
   REST_KNOWN_SOURCES,
   LAUNCHPAD_STATS_SOURCES,
   restErrorCodeV1Schema,
@@ -83,9 +84,12 @@ export {
   reshapeTradeToSwapV1,
   reshapeCreatedToCreatedV1,
   reshapeGraduatedToGraduatedV1,
+  liquidityQuoteToV1,
+  reshapePriceV1,
   wrapDataMessage,
 } from "./reshape";
 export type {
+  TokenLegConsumerInput,
   TradeConsumerInput,
   CreatedConsumerInput,
   GraduatedConsumerInput,

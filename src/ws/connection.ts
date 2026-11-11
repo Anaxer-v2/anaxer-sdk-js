@@ -11,10 +11,30 @@ import { Subscription, type StreamChannel } from "./subscription";
 
 export type ConnectionState = "idle" | "connecting" | "open" | "reconnecting" | "closed";
 
+/**
+ * Plan limits from the server `connected` frame.
+ *
+ * The three `transfers*` fields are optional: a gateway from before the transfers channel
+ * does not send them, and an SDK that required them would fail every handshake against it
+ * (0.1.0 broke the same way by hard-requiring fields). Unknown extra fields are ignored.
+ */
 export interface ConnectionLimits {
+  /** Max concurrent subscriptions per channel. */
   connectionsPerStream: number;
+  /** `trades` must carry a `mints` filter (Starter). */
   tradesRequiresMints: boolean;
+  /** Max `mints` on a `trades` subscription. */
   tradesMintCap: number;
+  /** `transfers` must carry a `wallets` or `mints` filter (Starter). */
+  transfersRequiresFilter?: boolean;
+  /** Max `wallets` on a `transfers` subscription. */
+  transfersWalletCap?: number;
+  /** Max `mints` on a `transfers` subscription. */
+  transfersMintCap?: number;
+}
+
+function finiteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 type ReadyWaiter = {
@@ -227,22 +247,17 @@ export class WsConnection extends EventEmitter {
   }
 
   private onConnected(msg: Record<string, unknown>): void {
-    const limitsObj = msg.limits as
-      | {
-          connectionsPerStream?: number;
-          tradesRequiresMints?: boolean;
-          tradesMintCap?: number;
-        }
-      | undefined;
+    const limitsObj =
+      msg.limits !== null && typeof msg.limits === "object"
+        ? (msg.limits as Record<string, unknown>)
+        : undefined;
     const connectionsPerStream = limitsObj?.connectionsPerStream;
     const tradesRequiresMints = limitsObj?.tradesRequiresMints;
     const tradesMintCap = limitsObj?.tradesMintCap;
     if (
-      typeof connectionsPerStream !== "number" ||
-      !Number.isFinite(connectionsPerStream) ||
+      !finiteNumber(connectionsPerStream) ||
       typeof tradesRequiresMints !== "boolean" ||
-      typeof tradesMintCap !== "number" ||
-      !Number.isFinite(tradesMintCap)
+      !finiteNumber(tradesMintCap)
     ) {
       const err = new AnaxerError(
         "internal_error",
@@ -257,7 +272,18 @@ export class WsConnection extends EventEmitter {
       }
       return;
     }
-    this.limits = { connectionsPerStream, tradesRequiresMints, tradesMintCap };
+    const limits: ConnectionLimits = { connectionsPerStream, tradesRequiresMints, tradesMintCap };
+    // Optional (absent on gateways from before the transfers channel): copy only when well-typed.
+    if (typeof limitsObj?.transfersRequiresFilter === "boolean") {
+      limits.transfersRequiresFilter = limitsObj.transfersRequiresFilter;
+    }
+    if (finiteNumber(limitsObj?.transfersWalletCap)) {
+      limits.transfersWalletCap = limitsObj.transfersWalletCap;
+    }
+    if (finiteNumber(limitsObj?.transfersMintCap)) {
+      limits.transfersMintCap = limitsObj.transfersMintCap;
+    }
+    this.limits = limits;
     this.state = "open";
     this.reconnectAttempt = 0;
     this.startHeartbeat();

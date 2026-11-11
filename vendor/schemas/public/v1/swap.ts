@@ -1,10 +1,14 @@
 import { z } from "zod";
 import type { Trade } from "../../trade";
 
-/** Token leg — structurally identical to the internal trade leg. */
+/**
+ * Token leg — the internal trade leg with `symbol` always present (build-plan 45: null until the
+ * token is resolved, or when it has no symbol on chain).
+ */
 export const tokenLegV1Schema = z
   .object({
     mint: z.string().min(1),
+    symbol: z.string().nullable(),
     amount: z.string().min(1),
     uiAmount: z.number().finite(),
     decimals: z.number().int().min(0).max(18),
@@ -37,9 +41,9 @@ export const swapV1Schema = z
 
 export type SwapV1 = z.infer<typeof swapV1Schema>;
 
-/** Type-level: v1 token leg matches internal Trade leg. */
+/** Type-level: a v1 token leg is a valid internal Trade leg (the internal `symbol` is optional). */
 type _AssertLegEqual = TokenLegV1 extends Trade["from"]
-  ? Trade["from"] extends TokenLegV1
+  ? Required<Trade["from"]> extends TokenLegV1
     ? true
     : never
   : never;

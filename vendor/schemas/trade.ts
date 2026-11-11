@@ -2,11 +2,14 @@
 //
 // `public/v1/swap.ts` imports `Trade` purely for a compile-time assertion that the
 // v1 token leg still matches the internal trade leg. This is that type and nothing
-// else: the internal timing envelope stays in the private monorepo.
+// else: the internal timing envelope stays in the private monorepo. Keep the leg in step
+// with packages/schemas/src/trade.ts (the mirror's typecheck fails otherwise; it did when
+// legs gained `symbol`).
 import { z } from "zod";
 
 const wireTokenLegSchema = z.object({
   mint: z.string().min(1),
+  symbol: z.string().nullable().optional(),
   amount: z.string().min(1),
   uiAmount: z.number().finite(),
   decimals: z.number().int().min(0).max(18),

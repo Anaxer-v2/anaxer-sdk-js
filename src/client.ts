@@ -8,6 +8,8 @@ import {
   type GraduationsListOpts,
   type RestApi,
   type TradesListOpts,
+  type WalletTradesListOpts,
+  type WalletTransfersListOpts,
 } from "./rest/endpoints";
 import { HttpClient } from "./rest/http";
 import type { Page } from "./rest/pagination";
@@ -20,6 +22,8 @@ import type {
   PricesFilters,
   SwapV1,
   TradesFilters,
+  TransferV1,
+  TransfersFilters,
 } from "./types";
 import { WsConnection, type ConnectionLimits } from "./ws/connection";
 import type { CreateSocket } from "./ws/socket";
@@ -33,7 +37,13 @@ export interface ClientEvents {
   error: [err: AnaxerError];
 }
 
-export type { CreationsListOpts, GraduationsListOpts, TradesListOpts };
+export type {
+  CreationsListOpts,
+  GraduationsListOpts,
+  TradesListOpts,
+  WalletTradesListOpts,
+  WalletTransfersListOpts,
+};
 
 /**
  * Public SDK client: WS lifecycle + REST namespaces.
@@ -44,6 +54,8 @@ export class Client extends EventEmitter {
   private readonly rest: RestApi;
 
   readonly tokens: RestApi["tokens"];
+  /** A wallet's trades and transfers (REST history). */
+  readonly wallets: RestApi["wallets"];
   readonly launchpads: RestApi["launchpads"];
 
   /** @internal test seam — not part of the public ClientConfig. */
@@ -74,6 +86,7 @@ export class Client extends EventEmitter {
     });
     this.rest = createRestApi(http);
     this.tokens = this.rest.tokens;
+    this.wallets = this.rest.wallets;
     this.launchpads = this.rest.launchpads;
   }
 
@@ -81,9 +94,15 @@ export class Client extends EventEmitter {
   stream(channel: "creations", filters?: CreationsFilters): Subscription<CreatedV1>;
   stream(channel: "graduations", filters?: GraduationsFilters): Subscription<GraduatedV1>;
   stream(channel: "prices", filters?: PricesFilters): Subscription<PriceUpdateV1>;
+  stream(channel: "transfers", filters?: TransfersFilters): Subscription<TransferV1>;
   stream(
-    channel: "trades" | "creations" | "graduations" | "prices",
-    filters?: TradesFilters | CreationsFilters | GraduationsFilters | PricesFilters,
+    channel: "trades" | "creations" | "graduations" | "prices" | "transfers",
+    filters?:
+      | TradesFilters
+      | CreationsFilters
+      | GraduationsFilters
+      | PricesFilters
+      | TransfersFilters,
   ): Subscription {
     return this.conn.stream(channel, filters);
   }

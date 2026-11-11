@@ -51,6 +51,10 @@ export const connectedMessageV1Schema = z
         connectionsPerStream: z.number().int().positive(),
         tradesRequiresMints: z.boolean(),
         tradesMintCap: z.number().int().nonnegative(),
+        /** Build-plan 43: must a transfers subscribe list wallets or mints, and how many of each. */
+        transfersRequiresFilter: z.boolean(),
+        transfersWalletCap: z.number().int().nonnegative(),
+        transfersMintCap: z.number().int().nonnegative(),
       })
       .strict(),
   })

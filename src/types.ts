@@ -11,9 +11,11 @@
  */
 export type {
   SwapV1,
+  TokenLegV1,
   CreatedV1,
   GraduatedV1,
   PriceUpdateV1,
+  RestPriceV1,
   TransferV1,
   TokenMetadataV1,
   LaunchpadStatsV1,
@@ -45,3 +47,13 @@ export type GraduationsFilters = Pick<
 
 /** `prices` channel filters — subset of `SubscriptionFiltersV1`. */
 export type PricesFilters = Pick<SubscriptionFiltersV1, "sources" | "mints">;
+
+/**
+ * `transfers` channel filters — subset of `SubscriptionFiltersV1`. No `sources` (transfers have
+ * no `source`). `direction` needs `wallets`. Starter must send `wallets` or `mints`; the caps are
+ * in the `connected` limits (`transfersRequiresFilter`, `transfersWalletCap`, `transfersMintCap`).
+ */
+export type TransfersFilters = Pick<
+  SubscriptionFiltersV1,
+  "wallets" | "mints" | "minVolumeUsd" | "maxVolumeUsd" | "direction"
+>;
